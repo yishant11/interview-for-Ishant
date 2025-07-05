@@ -1,7 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { Badge } from "../components/ui/badge";
 
 interface Launch {
   id: string;
@@ -48,6 +50,8 @@ export default function SpaceXDashboard() {
   const [launchpads, setLaunchpads] = useState<Record<string, Launchpad>>({});
   const [payloads, setPayloads] = useState<Record<string, Payload>>({});
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 12;
 
   useEffect(() => {
     fetchData();
@@ -135,6 +139,12 @@ export default function SpaceXDashboard() {
   const formatDate = (dateString: string) =>
     format(new Date(dateString), "dd MMM yyyy HH:mm");
 
+  const paginatedLaunches = launches.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+  const totalPages = Math.ceil(launches.length / itemsPerPage);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -146,9 +156,13 @@ export default function SpaceXDashboard() {
   return (
     <div className="min-h-screen bg-white">
       <div className="container mx-auto px-4">
-        <h1 className="text-4xl font-bold text-center py-8 border-b">
-          SpaceX Launches
-        </h1>
+        <div className="text-center mb-2 border-b w-full ">
+          <img
+            src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSPzK9Cf01wkBUz2S8RiApK1B_jNTsvxPm4mA&s"
+            alt="SpaceX Logo"
+            className="h-[3rem] w-[15rem] object-cover mx-auto "
+          />
+        </div>
         <div className="overflow-x-auto mt-6">
           <table className="w-full">
             <thead className="bg-gray-50">
@@ -177,10 +191,12 @@ export default function SpaceXDashboard() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {launches.slice(0, 12).map((launch, index) => (
+              {paginatedLaunches.map((launch, index) => (
                 <tr key={launch.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {String(index + 1).padStart(2, "0")}
+                    {String(
+                      (currentPage - 1) * itemsPerPage + index + 1
+                    ).padStart(2, "0")}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {formatDate(launch.date_utc)}
@@ -205,6 +221,37 @@ export default function SpaceXDashboard() {
             </tbody>
           </table>
         </div>
+        {totalPages > 1 && (
+          <div className="px-6 py-4 border-t">
+            <div className="flex items-end justify-end">
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                  aria-label="Go to previous page"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm text-gray-500">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() =>
+                    setCurrentPage(Math.min(totalPages, currentPage + 1))
+                  }
+                  disabled={currentPage === totalPages}
+                  aria-label="Go to next page"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
