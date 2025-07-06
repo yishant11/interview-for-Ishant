@@ -6,6 +6,7 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
+  Rocket,
   Youtube,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -39,18 +40,23 @@ interface Launch {
   launchpad: string;
   details: string | null;
   links: {
-    patch: { small: string | null; large: string | null };
+    patch: {
+      small: string | null;
+      large: string | null;
+    };
     webcast: string | null;
     wikipedia: string | null;
   };
   payloads: string[];
 }
+
 interface Rocket {
   id: string;
   name: string;
   type: string;
   description: string;
 }
+
 interface Launchpad {
   id: string;
   name: string;
@@ -58,6 +64,7 @@ interface Launchpad {
   locality: string;
   region: string;
 }
+
 interface Payload {
   id: string;
   name: string;
@@ -75,16 +82,20 @@ export default function SpaceXDashboard() {
   const [selectedLaunch, setSelectedLaunch] = useState<Launch | null>(null);
   const [filter, setFilter] = useState("All Launches");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
+
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   useEffect(() => {
     fetchData();
   }, []);
+
   const fetchData = async () => {
     try {
       setLoading(true);
+
       const [launchesRes, rocketsRes, launchpadsRes, payloadsRes] =
         await Promise.all([
           fetch("https://api.spacexdata.com/v5/launches"),
@@ -92,13 +103,12 @@ export default function SpaceXDashboard() {
           fetch("https://api.spacexdata.com/v4/launchpads"),
           fetch("https://api.spacexdata.com/v4/payloads"),
         ]);
-      const [launchesData, rocketsData, launchpadsData, payloadsData] =
-        await Promise.all([
-          launchesRes.json(),
-          rocketsRes.json(),
-          launchpadsRes.json(),
-          payloadsRes.json(),
-        ]);
+
+      const launchesData = await launchesRes.json();
+      const rocketsData = await rocketsRes.json();
+      const launchpadsData = await launchpadsRes.json();
+      const payloadsData = await payloadsRes.json();
+
       const createMap = <T extends { id: string }>(
         items: T[]
       ): Record<string, T> =>
@@ -106,6 +116,7 @@ export default function SpaceXDashboard() {
           acc[item.id] = item;
           return acc;
         }, {} as Record<string, T>);
+
       setLaunches(
         launchesData.sort(
           (a: Launch, b: Launch) =>
@@ -144,10 +155,11 @@ export default function SpaceXDashboard() {
     { label: "Past month", unit: "months", amount: 1 },
     { label: "Past 6 months", unit: "months", amount: 6 },
     { label: "Past year", unit: "years", amount: 1 },
+    { label: "Past 2 years", unit: "years", amount: 2 },
   ] as const;
 
   const getStatusBadge = (launch: Launch) => {
-    if (launch.upcoming)
+    if (launch.upcoming) {
       return (
         <Badge
           variant="outline"
@@ -156,16 +168,18 @@ export default function SpaceXDashboard() {
           Upcoming
         </Badge>
       );
-    if (launch.success === true)
+    }
+    if (launch.success === true) {
       return (
         <Badge
           variant="outline"
-          className="bg-green-50 text-green-600 border-green-300"
+          className="bg-green-50 text-green-600 border-green-300 "
         >
           Success
         </Badge>
       );
-    if (launch.success === false)
+    }
+    if (launch.success === false) {
       return (
         <Badge
           variant="outline"
@@ -174,6 +188,7 @@ export default function SpaceXDashboard() {
           Failed
         </Badge>
       );
+    }
     return (
       <Badge
         variant="outline"
@@ -184,8 +199,9 @@ export default function SpaceXDashboard() {
     );
   };
 
-  const formatDate = (dateString: string) =>
-    format(new Date(dateString), "dd MMM yyyy HH:mm");
+  const formatDate = (dateString: string) => {
+    return format(new Date(dateString), "dd MMM yyyy HH:mm");
+  };
 
   const filteredLaunches = launches.filter((launch) => {
     if (filter === "Upcoming Launches" && !launch.upcoming) return false;
@@ -196,11 +212,17 @@ export default function SpaceXDashboard() {
     if (dateRange?.from || dateRange?.to) {
       const launchDate = new Date(launch.date_utc);
       if (dateRange.from && launchDate < dateRange.from) return false;
-      if (
-        dateRange.to &&
-        launchDate > new Date(new Date(dateRange.to).setHours(23, 59, 59, 999))
-      )
+      if (dateRange.to && new Date(launch.date_utc) > new Date(dateRange.to))
         return false;
+    }
+
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      return (
+        launch.name.toLowerCase().includes(searchLower) ||
+        rockets[launch.rocket]?.name.toLowerCase().includes(searchLower) ||
+        launchpads[launch.launchpad]?.name.toLowerCase().includes(searchLower)
+      );
     }
     return true;
   });
@@ -209,6 +231,7 @@ export default function SpaceXDashboard() {
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
+
   const totalPages = Math.ceil(filteredLaunches.length / itemsPerPage);
 
   if (loading) {
@@ -230,195 +253,231 @@ export default function SpaceXDashboard() {
           />
         </div>
 
-        <div className="p-6 border-b">
-          <div className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center">
-            <Dialog open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="justify-start text-left font-normal bg-transparent"
-                >
-                  <Calendar className="mr-2 h-4 w-4" />
-                  {dateRange?.from ? (
-                    dateRange.to ? (
-                      <>
-                        {format(dateRange.from, "LLL dd, y")} -{" "}
-                        {format(dateRange.to, "LLL dd, y")}
-                      </>
-                    ) : (
-                      format(dateRange.from, "LLL dd, y")
-                    )
-                  ) : (
-                    "Select Date Range"
-                  )}
-                  <ChevronDown className="ml-2 h-4 w-4" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="p-0 sm:max-w-3xl">
-                <div className="flex">
-                  <div className="hidden sm:flex flex-col space-y-1 p-3 border-r bg-gray-50">
-                    <h3 className="px-3 py-2 text-sm font-semibold text-gray-600">
-                      Quick Ranges
-                    </h3>
-                    {datePresets.map(({ label, unit, amount }) => (
-                      <Button
-                        key={label}
-                        variant="ghost"
-                        className="w-full justify-start font-normal text-sm"
-                        onClick={() => setPresetDateRange(unit, amount)}
-                      >
-                        {label}
-                      </Button>
-                    ))}
-                  </div>
-                  <div className="flex-1">
-                    <CalendarComponent
-                      initialFocus
-                      mode="range"
-                      defaultMonth={dateRange?.from}
-                      selected={dateRange}
-                      onSelect={handleDateSelect}
-                      numberOfMonths={2}
-                    />
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <Filter className="mr-2 h-4 w-4" />
-                  {filter}
-                  <ChevronDown className="ml-2 h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setFilter("All Launches")}>
-                  All Launches
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setFilter("Upcoming Launches")}
-                >
-                  Upcoming Launches
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setFilter("Successful Launches")}
-                >
-                  Successful Launches
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setFilter("Failed Launches")}>
-                  Failed Launches
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-
-        {filteredLaunches.length === 0 ? (
-          <div className="py-32 text-center">
-            <p className="text-gray-500">
-              No results found for the specified filter
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      No.
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Launched (UTC)
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Location
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Mission
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Orbit
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Launch Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Rocket
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {paginatedLaunches.map((launch, index) => (
-                    <tr
-                      key={launch.id}
-                      className="hover:bg-gray-50 cursor-pointer"
-                      onClick={() => setSelectedLaunch(launch)}
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {String(
-                          (currentPage - 1) * itemsPerPage + index + 1
-                        ).padStart(2, "0")}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatDate(launch.date_utc)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {launchpads[launch.launchpad]?.name || "Unknown"}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {launch.name}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {payloads[launch.payloads[0]]?.orbit || "N/A"}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(launch)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {rockets[launch.rocket]?.name || "Unknown"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {totalPages > 1 && (
-              <div className="px-6 py-4 border-t">
-                <div className="flex items-end justify-end">
-                  <div className="flex items-center space-x-2">
+        <div className="">
+          <div className="p-6 border-b">
+            <div className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Dialog open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                  <DialogTrigger asChild>
                     <Button
                       variant="outline"
-                      size="icon"
-                      onClick={() =>
-                        setCurrentPage(Math.max(1, currentPage - 1))
-                      }
-                      disabled={currentPage === 1}
+                      className="justify-start text-left font-normal bg-transparent"
                     >
-                      <ChevronLeft className="h-4 w-4" />
+                      <Calendar className="mr-2 h-4 w-4" />
+                      {dateRange?.from ? (
+                        dateRange.to ? (
+                          <>
+                            {format(dateRange.from, "LLL dd, y")} -{" "}
+                            {format(dateRange.to, "LLL dd, y")}
+                          </>
+                        ) : (
+                          format(dateRange.from, "LLL dd, y")
+                        )
+                      ) : (
+                        "Select Date Range"
+                      )}
+                      <ChevronDown className="ml-2 h-4 w-4" />
                     </Button>
-                    <span className="text-sm">
-                      Page {currentPage} of {totalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() =>
-                        setCurrentPage(Math.min(totalPages, currentPage + 1))
-                      }
-                      disabled={currentPage === totalPages}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+                  </DialogTrigger>
+                  <DialogContent className="p-0 sm:max-w-3xl">
+                    <div className="flex">
+                      <div className="hidden sm:flex flex-col space-y-1 p-3 border-r bg-gray-50">
+                        <h3 className="px-3 py-2 text-sm font-semibold text-gray-600">
+                          Quick Ranges
+                        </h3>
+                        {datePresets.map(({ label, unit, amount }) => (
+                          <Button
+                            key={label}
+                            variant="ghost"
+                            className="w-full justify-start font-normal text-sm"
+                            onClick={() => setPresetDateRange(unit, amount)}
+                          >
+                            {label}
+                          </Button>
+                        ))}
+                      </div>
+
+                      <div className="flex-1">
+                        <CalendarComponent
+                          initialFocus
+                          mode="range"
+                          defaultMonth={dateRange?.from}
+                          selected={dateRange}
+                          onSelect={handleDateSelect}
+                          numberOfMonths={2}
+                        />
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
-            )}
-          </>
-        )}
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline">
+                    <Filter className="mr-2 h-4 w-4" />
+                    {filter}
+                    <ChevronDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setFilter("All Launches")}>
+                    All Launches
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setFilter("Upcoming Launches")}
+                  >
+                    Upcoming Launches
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setFilter("Successful Launches")}
+                  >
+                    Successful Launches
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setFilter("Failed Launches")}
+                  >
+                    Failed Launches
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+
+          {filteredLaunches.length === 0 ? (
+            <div className="py-32 text-center">
+              <p className="text-gray-500">
+                No results found for the specified filter
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        No.
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Launched (UTC)
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Location
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Mission
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Orbit
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Launch Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Rocket
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {paginatedLaunches.map((launch, index) => (
+                      <tr
+                        key={launch.id}
+                        className="hover:bg-gray-50 cursor-pointer"
+                        onClick={() => setSelectedLaunch(launch)}
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {String(
+                            (currentPage - 1) * itemsPerPage + index + 1
+                          ).padStart(2, "0")}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {formatDate(launch.date_utc)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {launchpads[launch.launchpad]?.name || "Unknown"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {launch.name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {payloads[launch.payloads[0]]?.orbit || "N/A"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {getStatusBadge(launch)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {rockets[launch.rocket]?.name || "Unknown"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {totalPages > 1 && (
+                <div className="px-6 py-4 border-t">
+                  <div className="flex items-end justify-end">
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() =>
+                          setCurrentPage(Math.max(1, currentPage - 1))
+                        }
+                        disabled={currentPage === 1}
+                        aria-label="Go to previous page"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      {Array.from(
+                        { length: Math.min(5, totalPages) },
+                        (_, i) => {
+                          const page = i + 1;
+                          return (
+                            <Button
+                              key={page}
+                              variant={
+                                currentPage === page ? "default" : "outline"
+                              }
+                              size="sm"
+                              onClick={() => setCurrentPage(page)}
+                            >
+                              {page}
+                            </Button>
+                          );
+                        }
+                      )}
+                      {totalPages > 5 && (
+                        <>
+                          <span className="text-gray-500">...</span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(totalPages)}
+                          >
+                            {totalPages}
+                          </Button>
+                        </>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() =>
+                          setCurrentPage(Math.min(totalPages, currentPage + 1))
+                        }
+                        disabled={currentPage === totalPages}
+                        aria-label="Go to next page"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       <Dialog
@@ -464,6 +523,7 @@ export default function SpaceXDashboard() {
                   {getStatusBadge(selectedLaunch)}
                 </div>
               </DialogHeader>
+
               <div className="px-6 pb-4 space-y-6">
                 {selectedLaunch.details && (
                   <p className="text-sm text-gray-700 leading-relaxed border-t pt-6">
@@ -480,6 +540,7 @@ export default function SpaceXDashboard() {
                     )}
                   </p>
                 )}
+
                 <div className="space-y-3 text-sm pt-1 border-t">
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-500">
@@ -513,6 +574,20 @@ export default function SpaceXDashboard() {
                     <span className="text-gray-900">
                       {rockets[selectedLaunch.rocket]?.name || "Unknown"}
                     </span>
+                  </div>
+                  <div className="border-t"></div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-500">
+                      Manufacturer
+                    </span>
+                    <span className="text-gray-900">SpaceX</span>
+                  </div>
+                  <div className="border-t"></div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-500">
+                      Nationality
+                    </span>
+                    <span className="text-gray-900">USA</span>
                   </div>
                   <div className="border-t"></div>
                   <div className="flex justify-between">
