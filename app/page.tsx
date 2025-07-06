@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import {
+  Calendar,
   ChevronDown,
   Filter,
   ChevronLeft,
@@ -20,8 +21,11 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
-import { format } from "date-fns";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { format, sub } from "date-fns";
+import type { DateRange } from "react-day-picker";
 
 interface Launch {
   id: string;
@@ -35,10 +39,7 @@ interface Launch {
   launchpad: string;
   details: string | null;
   links: {
-    patch: {
-      small: string | null;
-      large: string | null;
-    };
+    patch: { small: string | null; large: string | null };
     webcast: string | null;
     wikipedia: string | null;
   };
@@ -73,13 +74,14 @@ export default function SpaceXDashboard() {
   const [loading, setLoading] = useState(true);
   const [selectedLaunch, setSelectedLaunch] = useState<Launch | null>(null);
   const [filter, setFilter] = useState("All Launches");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   useEffect(() => {
     fetchData();
   }, []);
-
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -97,7 +99,6 @@ export default function SpaceXDashboard() {
           launchpadsRes.json(),
           payloadsRes.json(),
         ]);
-
       const createMap = <T extends { id: string }>(
         items: T[]
       ): Record<string, T> =>
@@ -105,7 +106,6 @@ export default function SpaceXDashboard() {
           acc[item.id] = item;
           return acc;
         }, {} as Record<string, T>);
-
       setLaunches(
         launchesData.sort(
           (a: Launch, b: Launch) =>
@@ -121,6 +121,30 @@ export default function SpaceXDashboard() {
       setLoading(false);
     }
   };
+
+  const handleDateSelect = (range: DateRange | undefined) => {
+    setDateRange(range);
+    if (range?.from && range?.to) {
+      setIsCalendarOpen(false);
+    }
+  };
+
+  const setPresetDateRange = (
+    unit: "weeks" | "months" | "years",
+    amount: number
+  ) => {
+    const to = new Date();
+    const from = sub(to, { [unit]: amount });
+    setDateRange({ from, to });
+    setIsCalendarOpen(false);
+  };
+
+  const datePresets = [
+    { label: "Past week", unit: "weeks", amount: 1 },
+    { label: "Past month", unit: "months", amount: 1 },
+    { label: "Past 6 months", unit: "months", amount: 6 },
+    { label: "Past year", unit: "years", amount: 1 },
+  ] as const;
 
   const getStatusBadge = (launch: Launch) => {
     if (launch.upcoming)
@@ -168,6 +192,16 @@ export default function SpaceXDashboard() {
     if (filter === "Successful Launches" && launch.success !== true)
       return false;
     if (filter === "Failed Launches" && launch.success !== false) return false;
+
+    if (dateRange?.from || dateRange?.to) {
+      const launchDate = new Date(launch.date_utc);
+      if (dateRange.from && launchDate < dateRange.from) return false;
+      if (
+        dateRange.to &&
+        launchDate > new Date(new Date(dateRange.to).setHours(23, 59, 59, 999))
+      )
+        return false;
+    }
     return true;
   });
 
@@ -197,7 +231,60 @@ export default function SpaceXDashboard() {
         </div>
 
         <div className="p-6 border-b">
-          <div className="flex justify-end">
+          <div className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center">
+            <Dialog open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="justify-start text-left font-normal bg-transparent"
+                >
+                  <Calendar className="mr-2 h-4 w-4" />
+                  {dateRange?.from ? (
+                    dateRange.to ? (
+                      <>
+                        {format(dateRange.from, "LLL dd, y")} -{" "}
+                        {format(dateRange.to, "LLL dd, y")}
+                      </>
+                    ) : (
+                      format(dateRange.from, "LLL dd, y")
+                    )
+                  ) : (
+                    "Select Date Range"
+                  )}
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="p-0 sm:max-w-3xl">
+                <div className="flex">
+                  <div className="hidden sm:flex flex-col space-y-1 p-3 border-r bg-gray-50">
+                    <h3 className="px-3 py-2 text-sm font-semibold text-gray-600">
+                      Quick Ranges
+                    </h3>
+                    {datePresets.map(({ label, unit, amount }) => (
+                      <Button
+                        key={label}
+                        variant="ghost"
+                        className="w-full justify-start font-normal text-sm"
+                        onClick={() => setPresetDateRange(unit, amount)}
+                      >
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="flex-1">
+                    <CalendarComponent
+                      initialFocus
+                      mode="range"
+                      defaultMonth={dateRange?.from}
+                      selected={dateRange}
+                      onSelect={handleDateSelect}
+                      numberOfMonths={2}
+                    />
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline">
@@ -230,7 +317,9 @@ export default function SpaceXDashboard() {
 
         {filteredLaunches.length === 0 ? (
           <div className="py-32 text-center">
-            <p className="text-gray-500">No results found</p>
+            <p className="text-gray-500">
+              No results found for the specified filter
+            </p>
           </div>
         ) : (
           <>
@@ -375,7 +464,6 @@ export default function SpaceXDashboard() {
                   {getStatusBadge(selectedLaunch)}
                 </div>
               </DialogHeader>
-
               <div className="px-6 pb-4 space-y-6">
                 {selectedLaunch.details && (
                   <p className="text-sm text-gray-700 leading-relaxed border-t pt-6">
