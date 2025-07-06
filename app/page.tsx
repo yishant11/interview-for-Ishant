@@ -1,8 +1,14 @@
 "use client";
 import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown, Filter, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { format } from "date-fns";
 
 interface Launch {
@@ -50,6 +56,7 @@ export default function SpaceXDashboard() {
   const [launchpads, setLaunchpads] = useState<Record<string, Launchpad>>({});
   const [payloads, setPayloads] = useState<Record<string, Payload>>({});
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("All Launches");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
 
@@ -139,11 +146,19 @@ export default function SpaceXDashboard() {
   const formatDate = (dateString: string) =>
     format(new Date(dateString), "dd MMM yyyy HH:mm");
 
-  const paginatedLaunches = launches.slice(
+  const filteredLaunches = launches.filter((launch) => {
+    if (filter === "Upcoming Launches" && !launch.upcoming) return false;
+    if (filter === "Successful Launches" && launch.success !== true)
+      return false;
+    if (filter === "Failed Launches" && launch.success !== false) return false;
+    return true;
+  });
+
+  const paginatedLaunches = filteredLaunches.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
-  const totalPages = Math.ceil(launches.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredLaunches.length / itemsPerPage);
 
   if (loading) {
     return (
@@ -163,94 +178,141 @@ export default function SpaceXDashboard() {
             className="h-[3rem] w-[15rem] object-cover mx-auto "
           />
         </div>
-        <div className="overflow-x-auto mt-6">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  No.
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Launched (UTC)
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Location
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Mission
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Orbit
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Launch Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Rocket
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {paginatedLaunches.map((launch, index) => (
-                <tr key={launch.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {String(
-                      (currentPage - 1) * itemsPerPage + index + 1
-                    ).padStart(2, "0")}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatDate(launch.date_utc)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {launchpads[launch.launchpad]?.name || "Unknown"}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {launch.name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {payloads[launch.payloads[0]]?.orbit || "N/A"}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {getStatusBadge(launch)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {rockets[launch.rocket]?.name || "Unknown"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {totalPages > 1 && (
-          <div className="px-6 py-4 border-t">
-            <div className="flex items-end justify-end">
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                  disabled={currentPage === 1}
-                  aria-label="Go to previous page"
-                >
-                  <ChevronLeft className="h-4 w-4" />
+        <div className="p-6 border-b">
+          <div className="flex flex-col lg:flex-row gap-4 justify-end items-center">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Filter className="mr-2 h-4 w-4" />
+                  {filter}
+                  <ChevronDown className="ml-2 h-4 w-4" />
                 </Button>
-                <span className="text-sm text-gray-500">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() =>
-                    setCurrentPage(Math.min(totalPages, currentPage + 1))
-                  }
-                  disabled={currentPage === totalPages}
-                  aria-label="Go to next page"
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setFilter("All Launches")}>
+                  All Launches
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setFilter("Upcoming Launches")}
                 >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+                  Upcoming Launches
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setFilter("Successful Launches")}
+                >
+                  Successful Launches
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setFilter("Failed Launches")}>
+                  Failed Launches
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
+        </div>
+
+        {filteredLaunches.length === 0 ? (
+          <div className="py-32 text-center">
+            <p className="text-gray-500">
+              No results found for the specified filter
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  {" "}
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      No.
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Launched (UTC)
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Location
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Mission
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Orbit
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Launch Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Rocket
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {paginatedLaunches.map((launch, index) => (
+                    <tr key={launch.id} className="hover:bg-gray-50">
+                      {" "}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {String(
+                          (currentPage - 1) * itemsPerPage + index + 1
+                        ).padStart(2, "0")}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatDate(launch.date_utc)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {launchpads[launch.launchpad]?.name || "Unknown"}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {launch.name}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {payloads[launch.payloads[0]]?.orbit || "N/A"}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {getStatusBadge(launch)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {rockets[launch.rocket]?.name || "Unknown"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {totalPages > 1 && (
+              <div className="px-6 py-4 border-t">
+                {" "}
+                <div className="flex items-end justify-end">
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() =>
+                        setCurrentPage(Math.max(1, currentPage - 1))
+                      }
+                      disabled={currentPage === 1}
+                      aria-label="Go to previous page"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm text-gray-500">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() =>
+                        setCurrentPage(Math.min(totalPages, currentPage + 1))
+                      }
+                      disabled={currentPage === totalPages}
+                      aria-label="Go to next page"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
